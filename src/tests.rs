@@ -81,6 +81,7 @@ fn test_sets() {
     assert_eq!(a_plus_diff, b);
 }
 
+#[test]
 fn test_path() {
     let a = PathBuf::from(r"/example/path/to/file.ext");
     let b = PathBuf::from(r"/different/path");
