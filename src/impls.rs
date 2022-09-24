@@ -291,10 +291,11 @@ where
 
 /// The diff struct used to compare two [HashMap]'s
 #[derive(Serialize, Deserialize)]
-#[serde(bound(serialize = "V::Repr: Serialize, K: Serialize"))]
-#[serde(bound(deserialize = "V::Repr: Deserialize<'de>, K: Deserialize<'de>"))]
+#[serde(bound(serialize = "V:Serialize, V::Repr: Serialize, K: Serialize"))]
+#[serde(bound(deserialize = "V:Deserialize<'de>, V::Repr: Deserialize<'de>, K: Deserialize<'de>"))]
 pub struct HashMapDiff<K: Hash + Eq, V: Diff> {
-    /// Values that are changed or added
+    pub added: HashMap<K, V>,
+    /// Values that are changed
     pub altered: HashMap<K, <V as Diff>::Repr>,
     /// Values that are removed
     pub removed: HashSet<K>,
@@ -302,10 +303,11 @@ pub struct HashMapDiff<K: Hash + Eq, V: Diff> {
 
 /// The diff struct used to compare two [BTreeMap]'s
 #[derive(Serialize, Deserialize)]
-#[serde(bound(serialize = "V::Repr: Serialize, K: Serialize"))]
-#[serde(bound(deserialize = "V::Repr: Deserialize<'de>, K: Deserialize<'de>"))]
+#[serde(bound(serialize = "V:Serialize, V::Repr: Serialize, K: Serialize"))]
+#[serde(bound(deserialize = "V:Deserialize<'de>, V::Repr: Deserialize<'de>, K: Deserialize<'de>"))]
 pub struct BTreeMapDiff<K: Ord + Eq, V: Diff> {
-    /// Values that are changed or added
+    pub added: BTreeMap<K, V>,
+    /// Values that are changed
     pub altered: BTreeMap<K, <V as Diff>::Repr>,
     /// Values that are removed
     pub removed: BTreeSet<K>,
@@ -316,12 +318,13 @@ macro_rules! diff_map {
         impl<K: $($constraints)*, V: Diff> Diff for $ty<K, V>
         where
             K: Clone,
-            V: PartialEq,
+            V: Clone + PartialEq,
         {
             type Repr = $diffty<K, V>;
 
             fn diff(&self, other: &Self) -> Self::Repr {
-                let mut diff = $diffty {
+                let mut diff: $diffty<K, V> = $diffty {
+                    added: $ty::new(),
                     altered: $ty::new(),
                     removed: $diffkey::new(),
                 };
@@ -337,8 +340,8 @@ macro_rules! diff_map {
                     }
                 }
                 for (key, value) in other {
-                    if let None = self.get(key) {
-                        diff.altered.insert(key.clone(), V::identity().diff(value));
+                    if !self.contains_key(key) {
+                        diff.added.insert(key.clone(), value.clone());
                     }
                 }
                 diff
@@ -352,9 +355,10 @@ macro_rules! diff_map {
                 for (key, change) in &diff.altered {
                     if let Some(original) = self.get_mut(key) {
                         original.apply(change);
-                    } else {
-                        self.insert(key.clone(), V::identity().apply_new(change));
                     }
+                }
+                for (key, value) in &diff.added {
+                    self.insert(key.clone(), value.clone());
                 }
             }
 
@@ -366,10 +370,12 @@ macro_rules! diff_map {
         impl<K: $($constraints)*, V: Diff> Debug for $diffty<K, V>
         where
             K: Debug,
+            V: Debug,
             V::Repr: Debug,
         {
             fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
                 f.debug_struct(stringify!($diffty))
+                    .field("added", &self.added)
                     .field("altered", &self.altered)
                     .field("removed", &self.removed)
                     .finish()
@@ -378,20 +384,23 @@ macro_rules! diff_map {
 
         impl<K: $($constraints)*, V: Diff> PartialEq for $diffty<K, V>
         where
+            V: PartialEq,
             V::Repr: PartialEq,
         {
             fn eq(&self, other: &Self) -> bool {
-                self.altered == other.altered && self.removed == other.removed
+                self.added == self.added && self.altered == other.altered && self.removed == other.removed
             }
         }
 
         impl<K: $($constraints)*, V: Diff> Clone for $diffty<K, V>
         where
             K: Clone,
+            V: Clone,
             V::Repr: Clone,
         {
             fn clone(&self) -> Self {
                 $diffty {
+                    added: self.added.clone(),
                     altered: self.altered.clone(),
                     removed: self.removed.clone(),
                 }

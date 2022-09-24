@@ -56,7 +56,8 @@ fn test_maps() {
     let a = generate_map(vec![("a", 1), ("b", 2), ("x", 42)]);
     let b = generate_map(vec![("b", 3), ("c", 4), ("x", 42)]);
     let expected = HashMapDiff {
-        altered: generate_map(vec![("b", 1), ("c", 4)]),
+        added: generate_map(vec![("c", 4)]),
+        altered: generate_map(vec![("b", 1)]),
         removed: vec!["a"].into_iter().collect::<HashSet<_>>(),
     };
     assert_eq!(a.diff(&b), expected);
