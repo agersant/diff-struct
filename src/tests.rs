@@ -45,7 +45,8 @@ fn test_char_string() {
 
 #[test]
 fn test_opt() {
-    assert_eq!(Some(10).diff(&Some(15)), OptionDiff::Some(5));
+    assert_eq!(None.diff(&Some(12)), OptionDiff::Some(12));
+    assert_eq!(Some(10).diff(&Some(15)), OptionDiff::Change(5));
     assert_eq!(None.apply_new(&OptionDiff::Some(5)), Some(5));
     assert_eq!(Some(100).apply_new(&OptionDiff::None), None);
     identity_test(Some(42))
