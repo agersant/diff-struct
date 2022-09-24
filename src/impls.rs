@@ -207,12 +207,13 @@ impl Diff for PathBuf {
 
 #[derive(Serialize, Deserialize)]
 pub enum OptionDiff<T: Diff> {
-    Some(T::Repr),
     None,
+    Some(T),
+    Change(T::Repr),
     NoChange,
 }
 
-impl<T: Diff + PartialEq> Diff for Option<T> {
+impl<T: Diff + Clone + PartialEq> Diff for Option<T> {
     type Repr = OptionDiff<T>;
 
     fn diff(&self, other: &Self) -> Self::Repr {
@@ -221,11 +222,11 @@ impl<T: Diff + PartialEq> Diff for Option<T> {
                 if value == other_value {
                     OptionDiff::NoChange
                 } else {
-                    OptionDiff::Some(value.diff(other_value))
+                    OptionDiff::Change(value.diff(other_value))
                 }
             }
             (Some(_), None) => OptionDiff::None,
-            (None, Some(other_value)) => OptionDiff::Some(T::identity().diff(other_value)),
+            (None, Some(other_value)) => OptionDiff::Some(other_value.clone()),
             (None, None) => OptionDiff::NoChange,
         }
     }
@@ -233,13 +234,12 @@ impl<T: Diff + PartialEq> Diff for Option<T> {
     fn apply(&mut self, diff: &Self::Repr) {
         match diff {
             OptionDiff::None => *self = None,
-            OptionDiff::Some(change) => {
+            OptionDiff::Some(value) => *self = Some(value.clone()),
+            OptionDiff::Change(change) => {
                 if let Some(value) = self {
                     value.apply(change);
-                } else {
-                    *self = Some(T::identity().apply_new(change))
                 }
-            }
+            },
             _ => {}
         }
     }
@@ -251,12 +251,14 @@ impl<T: Diff + PartialEq> Diff for Option<T> {
 
 impl<T: Diff> Debug for OptionDiff<T>
 where
+    T: Debug,
     T::Repr: Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match &self {
-            OptionDiff::Some(change) => f.debug_tuple("Some").field(change).finish(),
             OptionDiff::None => write!(f, "None"),
+            OptionDiff::Some(value) => f.debug_tuple("Some").field(value).finish(),
+            OptionDiff::Change(change) => f.debug_tuple("Change").field(change).finish(),
             OptionDiff::NoChange => write!(f, "NoChange"),
         }
     }
@@ -264,12 +266,14 @@ where
 
 impl<T: Diff> PartialEq for OptionDiff<T>
 where
+    T:PartialEq,
     T::Repr: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (OptionDiff::Some(a), OptionDiff::Some(b)) => a == b,
             (OptionDiff::None, OptionDiff::None) => true,
+            (OptionDiff::Some(a), OptionDiff::Some(b)) => a == b,
+            (OptionDiff::Change(a), OptionDiff::Change(b)) => a == b,
             (OptionDiff::NoChange, OptionDiff::NoChange) => true,
             _ => false,
         }
@@ -278,12 +282,14 @@ where
 
 impl<T: Diff> Clone for OptionDiff<T>
 where
+    T: Clone,
     T::Repr: Clone,
 {
     fn clone(&self) -> Self {
         match self {
-            OptionDiff::Some(a) => OptionDiff::Some(a.clone()),
             OptionDiff::None => OptionDiff::None,
+            OptionDiff::Some(a) => OptionDiff::Some(a.clone()),
+            OptionDiff::Change(a) => OptionDiff::Change(a.clone()),
             OptionDiff::NoChange => OptionDiff::NoChange,
         }
     }
