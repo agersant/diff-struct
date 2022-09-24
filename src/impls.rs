@@ -506,16 +506,17 @@ diff_set!(BTreeSet, BTreeSetDiff, BTreeSet, (Ord));
 
 /// The type of change to make to a vec
 #[derive(Serialize, Deserialize)]
-#[serde(bound(serialize = "T::Repr: Serialize"))]
-#[serde(bound(deserialize = "T::Repr: Deserialize<'de>"))]
+#[serde(bound(serialize = "T: Serialize, T::Repr: Serialize"))]
+#[serde(bound(deserialize = "T: Deserialize<'de>, T::Repr: Deserialize<'de>"))]
 pub enum VecDiffType<T: Diff> {
     Removed { index: usize, len: usize },
     Altered { index: usize, changes: Vec<T::Repr> },
-    Inserted { index: usize, changes: Vec<T::Repr> },
+    Inserted { index: usize, changes: Vec<T> },
 }
 
 impl<T: Diff> Debug for VecDiffType<T>
 where
+    T: Debug,
     T::Repr: Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
@@ -541,6 +542,7 @@ where
 
 impl<T: Diff> PartialEq for VecDiffType<T>
 where
+    T: PartialEq,
     T::Repr: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -573,6 +575,7 @@ where
 
 impl<T: Diff> Clone for VecDiffType<T>
 where
+    T: Clone,
     T::Repr: Clone
 {
     fn clone(&self) -> Self {
@@ -592,15 +595,15 @@ where
 
 /// The collection of difference-vec's
 #[derive(Serialize, Deserialize)]
-#[serde(bound(serialize = "T::Repr: Serialize"))]
-#[serde(bound(deserialize = "T::Repr: Deserialize<'de>"))]
-pub struct VecDiff<T: Diff>(pub Vec<VecDiffType<T>>);
+#[serde(bound(serialize = "T: Serialize, T::Repr: Serialize"))]
+#[serde(bound(deserialize = "T: Deserialize<'de>, T::Repr: Deserialize<'de>"))]
+pub struct VecDiff<T: Diff + Clone>(pub Vec<VecDiffType<T>>);
 
-impl<T: Diff + PartialEq> Diff for Vec<T> {
+impl<T: Diff + PartialEq + Clone> Diff for Vec<T> {
     type Repr = VecDiff<T>;
 
     fn diff(&self, other: &Self) -> Self::Repr {
-        let mut changes = Vec::new();
+        let mut changes: Vec<VecDiffType<T>> = Vec::new();
         let mut pos_x = 0;
         let mut pos_y = 0;
         loop {
@@ -616,10 +619,7 @@ impl<T: Diff + PartialEq> Diff for Vec<T> {
                 } else if insertions > 0 {
                     changes.push(VecDiffType::Inserted {
                         index: pos_x,
-                        changes: other[pos_y..pos_y + insertions]
-                            .iter()
-                            .map(|new| T::identity().diff(new))
-                            .collect(),
+                        changes: other[pos_y..pos_y + insertions].to_vec(),
                     });
                 }
             } else if deletions == insertions {
@@ -655,10 +655,7 @@ impl<T: Diff + PartialEq> Diff for Vec<T> {
                 });
                 changes.push(VecDiffType::Inserted {
                     index: pos_x + deletions,
-                    changes: other[pos_y + deletions..pos_y + insertions]
-                        .iter()
-                        .map(|new| T::identity().diff(new))
-                        .collect(),
+                    changes: other[pos_y + deletions..pos_y + insertions].to_vec(),
                 });
             }
 
@@ -685,7 +682,7 @@ impl<T: Diff + PartialEq> Diff for Vec<T> {
                     let index = (*index as isize + relative_index) as usize;
                     self.splice(index..index, changes
                         .iter()
-                        .map(|d| T::identity().apply_new(d))
+                        .cloned()
                     );
                     relative_index += changes.len() as isize;
                 }
@@ -705,7 +702,7 @@ impl<T: Diff + PartialEq> Diff for Vec<T> {
     }
 }
 
-impl<T: Diff> Debug for VecDiff<T>
+impl<T: Diff + Clone + Debug> Debug for VecDiff<T>
 where
     T::Repr: Debug,
 {
@@ -714,7 +711,7 @@ where
     }
 }
 
-impl<T: Diff> PartialEq for VecDiff<T>
+impl<T: Diff + Clone + PartialEq> PartialEq for VecDiff<T>
 where
     T::Repr: PartialEq
 {
@@ -723,7 +720,7 @@ where
     }
 }
 
-impl<T: Diff> Clone for VecDiff<T>
+impl<T: Diff + Clone> Clone for VecDiff<T>
 where
     T::Repr: Clone
 {
