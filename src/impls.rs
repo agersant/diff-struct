@@ -102,11 +102,11 @@ macro_rules! diff_int {
             type Repr = $ty;
 
             fn diff(&self, other: &Self) -> Self::Repr {
-                other.wrapping_sub(*self)
+                *other
             }
 
             fn apply(&mut self, diff: &Self::Repr) {
-                *self = self.wrapping_add(*diff);
+                *self = *diff
             }
 
             fn identity() -> $ty {
